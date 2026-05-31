@@ -258,6 +258,17 @@ def download_media(url, output_path="downloads", download_type="video", quality=
     return result
 
 
+def _slugify_filename(value: str) -> str:
+    # Nettoie le nom de fichier pour ne garder que l'essentiel (pas d'emojis, pas de caractères spéciaux bizarres)
+    # On garde les caractères alphanumériques, les points, tirets et underscores
+    import unicodedata
+    value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    name = re.sub(r"[^a-zA-Z0-9\._\- ]+", " ", value).strip()
+    # On remplace les espaces multiples par un seul tiret
+    name = re.sub(r"\s+", "-", name)
+    return name or "media"
+
+
 def _ydlp_download(url, output_path="downloads", download_type="video", quality="best") -> dict[str, Any]:
     """Téléchargement yt-dlp interne."""
     os.makedirs(output_path, exist_ok=True)
@@ -283,7 +294,7 @@ def _ydlp_download(url, output_path="downloads", download_type="video", quality=
 
     ydl_opts = {
         "format": format_str,
-        "outtmpl": os.path.join(output_path, "%(title)s.%(ext)s").replace("\\", "/"),
+        "outtmpl": os.path.join(output_path, "%(title).200s.%(ext)s").replace("\\", "/"),
         "quiet": False,
         "no_warnings": False,
         "postprocessors": [postprocessor] if postprocessor else [],
@@ -321,10 +332,32 @@ def _ydlp_download(url, output_path="downloads", download_type="video", quality=
                 + (f" | Quality: {quality.upper()}" if download_type == "video" else "")
             )
             info = ydl.extract_info(url, download=True)
-            print(f"Downloaded: {info.get('title')}")
+            raw_title = info.get('title') or "download"
+            print(f"Downloaded: {raw_title}")
 
         created_files = _collect_created_files(output_path, before_files)
-        selected_file = _resolve_downloaded_file(info, created_files, output_path, download_type)
+        
+        # --- FIX: Renommage pour supprimer les emojis/caractères spéciaux ---
+        original_file = _resolve_downloaded_file(info, created_files, output_path, download_type)
+        if original_file and os.path.isfile(original_file):
+            dir_name = os.path.dirname(original_file)
+            base_name = os.path.basename(original_file)
+            name_part, extension = os.path.splitext(base_name)
+            
+            # On nettoie le nom (slugify)
+            clean_name = _slugify_filename(name_part)
+            new_file = os.path.join(dir_name, f"{clean_name}{extension}")
+            
+            if original_file != new_file:
+                # Si un fichier avec le nom propre existe déjà, on le supprime d'abord
+                if os.path.exists(new_file):
+                    os.remove(new_file)
+                os.rename(original_file, new_file)
+                selected_file = new_file
+            else:
+                selected_file = original_file
+        else:
+            selected_file = original_file
 
         return {
             "title": info.get("title") if isinstance(info, dict) else "download",

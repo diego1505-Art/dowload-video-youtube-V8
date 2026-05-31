@@ -193,8 +193,15 @@ def fetch_episodes():
                     ] or [(requested_season, main_results[min(requested_season - 1, len(main_results) - 1)])]
 
                 for season_num, anime_entry in seasons_to_generate:
-                    ep_count = anime_entry.get('episodes') or 24
-
+                    # On récupère le nombre d'épisodes de MAL
+                    ep_count = anime_entry.get('episodes')
+                    
+                    # Si MAL ne connaît pas encore le nombre (anime en cours) ou si c'est 0/None
+                    # on met une valeur par défaut élevée (ex: 24 ou 25) pour ne rien rater
+                    if not ep_count or ep_count == 0:
+                        ep_count = 25 # Valeur par défaut pour les animes en cours
+                        print(f"[DEBUG] Saison {season_num} : Nombre d'épisodes inconnu sur MAL, on tente {ep_count}")
+                    
                     # Franime peut garder le même anime_id pour plusieurs saisons.
                     # La séparation fiable est donc le paramètre s=, pas l'ID.
                     season_best_id = anime_id

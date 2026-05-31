@@ -213,24 +213,28 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None) -> t
             print("  [franime] Challenge Cloudflare détecté, attente de résolution (jusqu'à 25s)...")
             try:
                 # On essaie de cliquer sur la checkbox si elle apparaît (iframe Cloudflare)
-                for _ in range(5):
-                    if "challenge-platform" not in page.content() and "cloudflare" not in page.content().lower():
+                for i in range(10): # Augmenté à 10 tentatives
+                    if "challenge-platform" not in page.content() and "cloudflare" not in page.content().lower() and "just a moment" not in page.title().lower():
                         break
+                    
+                    # On bouge la souris pour paraître humain
+                    page.mouse.move(100 + i*50, 100 + i*50)
+                    
                     # On cherche l'iframe du challenge
                     frames = page.frames
                     for f in frames:
                         if "cloudflare" in f.url or "turnstile" in f.url:
                             try:
-                                checkbox = f.query_selector("input[type='checkbox']")
+                                checkbox = f.query_selector("input[type='checkbox'], #challenge-stage")
                                 if checkbox:
                                     checkbox.click()
-                                    print("  [franime] ✓ Clic sur la checkbox Cloudflare")
+                                    print(f"  [franime] ✓ Tentative de clic Cloudflare ({i+1})")
                             except: pass
                     page.wait_for_timeout(2000)
 
                 # On attend le bouton final
-                page.wait_for_selector("button:has-text('Regarder')", timeout=20_000)
-                print("  [franime] ✓ Challenge Cloudflare passé !")
+                page.wait_for_selector("button:has-text('Regarder'), .player-container", timeout=25_000)
+                print("  [franime] ✓ Page accessible !")
             except Exception:
                 print("  [franime] ⚠ Le challenge semble toujours présent ou le bouton n'apparaît pas.")
                 page.wait_for_timeout(2_000)
